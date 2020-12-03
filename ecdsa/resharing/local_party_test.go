@@ -8,7 +8,6 @@ package resharing_test
 
 import (
 	"crypto/ecdsa"
-	"fmt"
 	"math/big"
 	"runtime"
 	"sync/atomic"
@@ -38,17 +37,17 @@ func TestE2EConcurrent(t *testing.T) {
 	// tss.SetCurve(elliptic.P224())
 
 	// PHASE: load keygen fixtures
-	oldKeys, oldPIDs, err := keygen.LoadKeygenTestFixtures(test.TestParticipants, 0)
+	oldKeys, oldPIDs, err := keygen.LoadKeygenTestFixtures(test.TestReSharingThreshold, 0)
 	assert.NoError(t, err, "should load keygen fixtures")
 	oldP2PCtx := tss.NewPeerContext(oldPIDs)
-	assert.Equal(t, len(oldPIDs), test.TestParticipants)
+	assert.Equal(t, len(oldPIDs), test.TestThreshold+1)
 
 	// PHASE: resharing
 	newPIDs := tss.GenerateTestPartyIDs(test.TestReSharingParticipants)
 	newP2PCtx := tss.NewPeerContext(newPIDs)
 	assert.Equal(t, len(newPIDs), test.TestReSharingParticipants)
 
-	t.Logf("oldPIDs %d %v newPIDs %d %v\n", test.TestParticipants, oldPIDs, test.TestReSharingParticipants, newPIDs)
+	common.Logger.Infof("oldPIDs %d %v newPIDs %d %v\n", test.TestParticipants, oldPIDs, test.TestReSharingParticipants, newPIDs)
 
 	oldCommittee := make([]*LocalParty, 0, test.TestParticipants)
 	newCommittee := make([]*LocalParty, 0, test.TestReSharingParticipants)
@@ -83,6 +82,7 @@ func TestE2EConcurrent(t *testing.T) {
 			}
 		}(P)
 	}
+
 	// start the old parties; they will send messages
 	for _, P := range oldCommittee {
 		go func(P *LocalParty) {
@@ -171,7 +171,7 @@ signing:
 
 	var signEnded int32
 	for {
-		fmt.Printf("ACTIVE GOROUTINES: %d\n", runtime.NumGoroutine())
+		common.Logger.Infof("ACTIVE GOROUTINES: %d\n", runtime.NumGoroutine())
 		select {
 		case err := <-signErrCh:
 			common.Logger.Errorf("Error: %s", err)
