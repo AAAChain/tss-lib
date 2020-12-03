@@ -60,14 +60,14 @@ func (round *finalization) Start() *tss.Error {
 	round.data.SignatureRecovery = []byte{byte(recid)}
 	round.data.R = round.temp.rx.Bytes()
 	round.data.S = sumS.Bytes()
-	round.data.M = round.temp.m.Bytes()
+	round.data.M = round.temp.m
 
 	pk := ecdsa.PublicKey{
 		Curve: tss.EC(),
 		X:     round.key.ECDSAPub.X(),
 		Y:     round.key.ECDSAPub.Y(),
 	}
-	ok := ecdsa.Verify(&pk, round.temp.m.Bytes(), round.temp.rx, sumS)
+	ok := ecdsa.Verify(&pk, round.temp.m, round.temp.rx, sumS)
 	if !ok {
 		return round.WrapError(fmt.Errorf("signature verification failed"))
 	}

@@ -8,6 +8,7 @@ package signing
 
 import (
 	"errors"
+	"math/big"
 
 	errors2 "github.com/pkg/errors"
 
@@ -61,7 +62,7 @@ func (round *round5) Start() *tss.Error {
 	modN := common.ModInt(N)
 	rx := R.X()
 	ry := R.Y()
-	si := modN.Add(modN.Mul(round.temp.m, round.temp.k), modN.Mul(rx, round.temp.sigma))
+	si := modN.Add(modN.Mul(new(big.Int).SetBytes(round.temp.m), round.temp.k), modN.Mul(rx, round.temp.sigma))
 
 	// clear temp.w and temp.k from memory, lint ignore
 	round.temp.w = zero
