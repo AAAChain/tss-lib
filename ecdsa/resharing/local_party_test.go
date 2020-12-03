@@ -26,11 +26,6 @@ import (
 	"github.com/binance-chain/tss-lib/tss"
 )
 
-const (
-	testParticipants = test.TestParticipants
-	testThreshold    = test.TestThreshold
-)
-
 func setUp(level string) {
 	if err := log.SetLogLevel("tss-lib", level); err != nil {
 		panic(err)
@@ -40,28 +35,23 @@ func setUp(level string) {
 func TestE2EConcurrent(t *testing.T) {
 	setUp("info")
 
-	// tss.SetCurve(elliptic.P256())
-
-	threshold, newThreshold := testThreshold, testThreshold
+	// tss.SetCurve(elliptic.P224())
 
 	// PHASE: load keygen fixtures
-	firstPartyIdx, extraParties := 5, 1 // extra can be 0 to N-first
-	oldKeys, oldPIDs, err := keygen.LoadKeygenTestFixtures(testThreshold+1+extraParties+firstPartyIdx, firstPartyIdx)
+	oldKeys, oldPIDs, err := keygen.LoadKeygenTestFixtures(test.TestParticipants, 0)
 	assert.NoError(t, err, "should load keygen fixtures")
+	oldP2PCtx := tss.NewPeerContext(oldPIDs)
+	assert.Equal(t, len(oldPIDs), test.TestParticipants)
 
 	// PHASE: resharing
-	oldP2PCtx := tss.NewPeerContext(oldPIDs)
-	// init the new parties; re-use the fixture pre-params for speed
-	fixtures, _, err := keygen.LoadKeygenTestFixtures(testParticipants)
-	if err != nil {
-		common.Logger.Info("No test fixtures were found, so the safe primes will be generated from scratch. This may take a while...")
-	}
-	newPIDs := tss.GenerateTestPartyIDs(testParticipants)
+	newPIDs := tss.GenerateTestPartyIDs(test.TestReSharingParticipants)
 	newP2PCtx := tss.NewPeerContext(newPIDs)
-	newPCount := len(newPIDs)
+	assert.Equal(t, len(newPIDs), test.TestReSharingParticipants)
 
-	oldCommittee := make([]*LocalParty, 0, len(oldPIDs))
-	newCommittee := make([]*LocalParty, 0, newPCount)
+	t.Logf("oldPIDs %d %v newPIDs %d %v\n", test.TestParticipants, oldPIDs, test.TestReSharingParticipants, newPIDs)
+
+	oldCommittee := make([]*LocalParty, 0, test.TestParticipants)
+	newCommittee := make([]*LocalParty, 0, test.TestReSharingParticipants)
 	bothCommitteesPax := len(oldCommittee) + len(newCommittee)
 
 	errCh := make(chan *tss.Error, bothCommitteesPax)
@@ -72,17 +62,15 @@ func TestE2EConcurrent(t *testing.T) {
 
 	// init the old parties first
 	for j, pID := range oldPIDs {
-		params := tss.NewReSharingParameters(oldP2PCtx, newP2PCtx, pID, testParticipants, threshold, newPCount, newThreshold)
+		params := tss.NewReSharingParameters(oldP2PCtx, newP2PCtx, pID, test.TestParticipants, test.TestThreshold, test.TestReSharingParticipants, test.TestReSharingThreshold)
 		P := NewLocalParty(params, oldKeys[j], outCh, endCh).(*LocalParty) // discard old key data
 		oldCommittee = append(oldCommittee, P)
 	}
+
 	// init the new parties
-	for j, pID := range newPIDs {
-		params := tss.NewReSharingParameters(oldP2PCtx, newP2PCtx, pID, testParticipants, threshold, newPCount, newThreshold)
-		save := keygen.NewLocalPartySaveData(newPCount)
-		if j < len(fixtures) && len(newPIDs) <= len(fixtures) {
-			save.LocalPreParams = fixtures[j].LocalPreParams
-		}
+	for _, pID := range newPIDs {
+		params := tss.NewReSharingParameters(oldP2PCtx, newP2PCtx, pID, test.TestParticipants, test.TestThreshold, test.TestReSharingParticipants, test.TestReSharingThreshold)
+		save := keygen.NewLocalPartySaveData(test.TestReSharingParticipants)
 		P := NewLocalParty(params, save, outCh, endCh).(*LocalParty)
 		newCommittee = append(newCommittee, P)
 	}
@@ -108,7 +96,7 @@ func TestE2EConcurrent(t *testing.T) {
 	endedOldCommittee := 0
 	var reSharingEnded int32
 	for {
-		fmt.Printf("ACTIVE GOROUTINES: %d\n", runtime.NumGoroutine())
+		common.Logger.Infof("ACTIVE GOROUTINES: %d\n", runtime.NumGoroutine())
 		select {
 		case err := <-errCh:
 			common.Logger.Errorf("Error: %s", err)
@@ -171,7 +159,7 @@ signing:
 	signEndCh := make(chan common.SignatureData, len(signPIDs))
 
 	for j, signPID := range signPIDs {
-		params := tss.NewParameters(signP2pCtx, signPID, len(signPIDs), newThreshold)
+		params := tss.NewParameters(signP2pCtx, signPID, len(signPIDs), test.TestReSharingThreshold)
 		P := signing.NewLocalParty(big.NewInt(42), params, signKeys[j], signOutCh, signEndCh).(*signing.LocalParty)
 		signParties = append(signParties, P)
 		go func(P *signing.LocalParty) {
@@ -211,13 +199,25 @@ signing:
 			if atomic.LoadInt32(&signEnded) == int32(len(signPIDs)) {
 				t.Logf("Signing done. Received sign data from %d participants", signEnded)
 
+				signData.GetSignatureRecovery()
+
 				// BEGIN ECDSA verify
-				pkX, pkY := signKeys[0].ECDSAPub.X(), signKeys[0].ECDSAPub.Y()
+				pkX, pkY := oldKeys[0].ECDSAPub.X(), oldKeys[0].ECDSAPub.Y()
 				pk := ecdsa.PublicKey{
 					Curve: tss.EC(),
 					X:     pkX,
 					Y:     pkY,
 				}
+
+				pkX1, pkY1 := signKeys[0].ECDSAPub.X(), signKeys[0].ECDSAPub.Y()
+				pk1 := ecdsa.PublicKey{
+					Curve: tss.EC(),
+					X:     pkX1,
+					Y:     pkY1,
+				}
+
+				t.Logf("oldKeys %d newKeys %d pk %+v pk1 %+v", len(oldKeys), len(signKeys), pk, pk1)
+
 				ok := ecdsa.Verify(&pk, big.NewInt(42).Bytes(),
 					new(big.Int).SetBytes(signData.R),
 					new(big.Int).SetBytes(signData.S))

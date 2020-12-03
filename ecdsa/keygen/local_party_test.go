@@ -249,7 +249,9 @@ keygen:
 				u := new(big.Int)
 				for j, Pj := range parties {
 					pShares := make(vss.Shares, 0)
+					t.Log("threshold", threshold, pShares, j)
 					for j2, P := range parties {
+						t.Log("threshold", threshold, pShares, j, j2)
 						if j2 == j {
 							continue
 						}
