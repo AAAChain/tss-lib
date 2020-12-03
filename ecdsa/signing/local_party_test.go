@@ -7,6 +7,7 @@
 package signing
 
 import (
+	"bytes"
 	"context"
 	"crypto/ecdsa"
 	"crypto/elliptic"
@@ -50,8 +51,12 @@ func publicKeyBytesToAddress(publicKey []byte) ecommon.Address {
 }
 
 func TestBNtoBytesAndReverse(t *testing.T) {
-	helloWorldBytes := []byte("hello world!")
-	assert.Equal(t, helloWorldBytes, new(big.Int).SetBytes(helloWorldBytes).Bytes())
+	var helloWorldBytes bytes.Buffer
+	for i := 0; i < 1000; i++ {
+		_, err := helloWorldBytes.WriteString("hello world!")
+		assert.Nil(t, err)
+	}
+	assert.Equal(t, helloWorldBytes.Bytes(), new(big.Int).SetBytes(helloWorldBytes.Bytes()).Bytes())
 }
 
 func TestE2EConcurrent(t *testing.T) {
@@ -115,7 +120,7 @@ func TestE2EConcurrent(t *testing.T) {
 	for i := 0; i < len(signPIDs); i++ {
 		params := tss.NewParameters(p2pCtx, signPIDs[i], len(signPIDs), threshold)
 
-		P := NewLocalParty(h, params, keys[i], outCh, endCh).(*LocalParty)
+		P := NewLocalParty(new(big.Int).SetBytes(h), params, keys[i], outCh, endCh).(*LocalParty)
 		parties = append(parties, P)
 		go func(P *LocalParty) {
 			if err := P.Start(); err != nil {

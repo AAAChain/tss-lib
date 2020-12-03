@@ -55,9 +55,9 @@ type (
 		localMessageStore
 
 		// temp data (thrown away after sign) / round 1
-		m []byte
 
 		w,
+		m,
 		k,
 		theta,
 		thetaInverse,
@@ -95,7 +95,7 @@ type (
 )
 
 func NewLocalParty(
-	msg []byte,
+	msg *big.Int,
 	params *tss.Parameters,
 	key keygen.LocalPartySaveData,
 	out chan<- tss.Message,
